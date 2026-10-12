@@ -1,0 +1,34 @@
+module apb;
+
+// AMBA APB4 (ARM IHI 0024): a two-phase bus. The Requester raises `psel`
+// for the setup phase and `penable` for the access phase; the Completer
+// finishes the access with `pready`. `A` is the address width and `D` the
+// data width (8, 16 or 32); `pstrb` carries one bit per data byte.
+//
+// PCLK and PRESETn are global to the interface and stay ordinary ports of
+// the endpoint entities. One `psel` per Completer: a decoder fans them out.
+
+use std::bits::unsigned;
+
+pub struct Apb<A: integer, D: integer> {
+    pub paddr: unsigned[A],
+    pub pprot: unsigned[3],
+    pub psel: Bit,
+    pub penable: Bit,
+    pub pwrite: Bit,
+    pub pwdata: unsigned[D],
+    pub pstrb: unsigned[D / 8],
+    pub pready: Bit,
+    pub prdata: unsigned[D],
+    pub pslverr: Bit
+}
+
+pub view Requester<A: integer, D: integer> for Apb<A, D> {
+    paddr out, pprot out, psel out, penable out, pwrite out, pwdata out,
+    pstrb out, pready in, prdata in, pslverr in
+}
+
+pub view Completer<A: integer, D: integer> for Apb<A, D> {
+    paddr in, pprot in, psel in, penable in, pwrite in, pwdata in,
+    pstrb in, pready out, prdata out, pslverr out
+}

@@ -1,0 +1,47 @@
+module apb_test;
+
+use std::bits::unsigned;
+use apb::{Apb, Completer};
+
+// A one-register Completer with no wait states.
+entity Register { clk: Bit in, bus: Apb<12, 32> Completer }
+impl Register {
+    let value: unsigned[32] = 0;
+    step: process {
+        if clk.rising() {
+            if bus.psel and bus.penable and bus.pwrite {
+                value = bus.pwdata;
+            }
+        }
+    }
+    bus.pready = '1';
+    bus.prdata = value;
+    bus.pslverr = '0';
+}
+
+#[test]
+entity ApbTest {}
+impl ApbTest {
+    let clk: Bit = '0';
+    let bus: Apb<12, 32>;
+    let dut: Register = { .clk = clk, .bus = bus };
+
+    // Write: setup phase, then access phase.
+    bus.paddr = 0x004; bus.pprot = 0; bus.pwrite = '1'; bus.pwdata = 0xDEAD_BEEF;
+    bus.pstrb = 0xF; bus.psel = '1'; bus.penable = '0';
+    await 1ns;
+    clk = '1'; await 1ns; clk = '0';
+    bus.penable = '1';
+    await 1ns;
+    assert!(bus.pready == '1', "no wait states");
+    clk = '1'; await 1ns; clk = '0';
+    bus.psel = '0'; bus.penable = '0';
+
+    // Read.
+    bus.pwrite = '0'; bus.psel = '1';
+    await 1ns;
+    clk = '1'; await 1ns; clk = '0';
+    bus.penable = '1';
+    await 1ns;
+    assert!(bus.prdata == 0xDEAD_BEEF and bus.pslverr == '0', "read returns the written word");
+}
