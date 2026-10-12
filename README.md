@@ -22,11 +22,18 @@ entity Peripheral { clk: Bit in, bus: Apb<12, 32> Completer }
 
 A parent connects a `Requester` and a `Completer` through one `let wire: Apb<12, 32>;`.
 
+## Components
+
+| Entity | What it does |
+|---|---|
+| `apb::Interconnect<A, D, N, REGION>` | One Requester to `N` Completers. Completer `i` owns the `2^REGION` bytes at `i << REGION`; unmapped accesses complete with `pslverr`. Purely combinational, so it adds no wait states. |
+
 ## Test
 
 ```bash
 sioxc --std <sioxc>/std --test apb_test.siox -o apb_test && ./apb_test
 ```
 
-`apb_test.siox` is a small completer driven by a testbench. Needs a
-`sioxc` with Siox-lang/sioxc#68: width-parameterised struct ports.
+`apb_test.siox` and `interconnect_test.siox` drive the interface and the
+interconnect from testbenches. Needs a
+`sioxc` with Siox-lang/sioxc#69: arrays of view ports.

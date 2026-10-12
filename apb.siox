@@ -32,3 +32,35 @@ pub view Completer<A: integer, D: integer> for Apb<A, D> {
     paddr in, pprot in, psel in, penable in, pwrite in, pwdata in,
     pstrb in, pready out, prdata out, pslverr out
 }
+
+// One Requester to `N` Completers. Completer `i` owns the `2^REGION` bytes at
+// `i << REGION`; an access past the last one completes at once with
+// `pslverr`. APB holds the address for the whole transfer, so the decode is
+// combinational and the interconnect adds no wait states.
+pub entity Interconnect<A: integer, D: integer, N: integer, REGION: integer> {
+    up: Apb<A, D> Completer,
+    down: Apb<A, D>[N] Requester
+}
+
+impl<A: integer, D: integer, N: integer, REGION: integer> Interconnect<A, D, N, REGION> {
+    let index: unsigned[A];
+    index = up.paddr >> REGION;
+    for i in 0..N - 1 {
+        down[i].paddr = up.paddr;
+        down[i].pprot = up.pprot;
+        down[i].penable = up.penable;
+        down[i].pwrite = up.pwrite;
+        down[i].pwdata = up.pwdata;
+        down[i].pstrb = up.pstrb;
+        down[i].psel = if index == i { up.psel } else { '0' };
+    }
+    if index < N {
+        up.pready = down[index].pready;
+        up.prdata = down[index].prdata;
+        up.pslverr = down[index].pslverr;
+    } else {
+        up.pready = '1';
+        up.prdata = 0;
+        up.pslverr = '1';
+    }
+}

@@ -1,0 +1,58 @@
+module interconnect_test;
+
+use std::bits::unsigned;
+use apb::{Apb, Completer, Interconnect};
+
+entity Register { clk: Bit in, bus: Apb<12, 32> Completer }
+impl Register {
+    let value: unsigned[32] = 0;
+    step: process {
+        if clk.rising() {
+            if bus.psel and bus.penable and bus.pwrite {
+                value = bus.pwdata;
+            }
+        }
+    }
+    bus.pready = '1';
+    bus.prdata = value;
+    bus.pslverr = '0';
+}
+
+// Two registers behind the interconnect, 256 bytes apart.
+entity System { clk: Bit in, up: Apb<12, 32> Completer }
+impl System {
+    let down: Apb<12, 32>[2];
+    let bus: Interconnect<12, 32, 2, 8> = { .up = up, .down = down };
+    let r0: Register = { .clk = clk, .bus = down[0] };
+    let r1: Register = { .clk = clk, .bus = down[1] };
+}
+
+#[test]
+entity InterconnectTest {}
+impl InterconnectTest {
+    let clk: Bit = '0';
+    let bus: Apb<12, 32>;
+    let dut: System = { .clk = clk, .up = bus };
+    bus.pprot = 0; bus.pstrb = 0xF; bus.psel = '0'; bus.penable = '0';
+
+    for k in 0..1 {
+        bus.paddr = k * 0x100; bus.pwrite = '1'; bus.pwdata = 0x1000 + k;
+        bus.psel = '1';
+        await 1ns; clk = '1'; await 1ns; clk = '0';
+        bus.penable = '1';
+        await 1ns; clk = '1'; await 1ns; clk = '0';
+        bus.psel = '0'; bus.penable = '0';
+    }
+    for k in 0..1 {
+        bus.paddr = k * 0x100 + 4; bus.pwrite = '0'; bus.psel = '1';
+        await 1ns; clk = '1'; await 1ns; clk = '0';
+        bus.penable = '1';
+        await 1ns;
+        assert!(bus.prdata == 0x1000 + k and bus.pslverr == '0', "each completer holds its own word");
+        clk = '1'; await 1ns; clk = '0';
+        bus.psel = '0'; bus.penable = '0';
+    }
+    bus.paddr = 0x300; bus.psel = '1'; bus.penable = '1';
+    await 1ns;
+    assert!(bus.pready == '1' and bus.pslverr == '1', "an unmapped address errors");
+}
